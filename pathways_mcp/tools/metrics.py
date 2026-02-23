@@ -9,21 +9,29 @@ async def get_segment_metrics(
     segmentation_code: str,
     segment_code: str,
     theme_code: str | None = None,
+    domain_code: str | None = None,
     variable_codes: list[str] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> str:
     """Get quantitative metrics (indicators, prevalence) for a segment.
 
-    Each metric links a segment to a variable and optionally a categorical
-    level, providing percentage, average, or distribution statistics.
+    Metrics fall into two categories:
+    - **Health Outcomes**: linked to Themes (e.g., maternal_health, nutrition).
+      Filter with theme_code.
+    - **Vulnerability Factors**: linked to Domains (e.g., household_economics,
+      social_support). Filter with domain_code.
+
+    Use list_themes_and_domains to discover available theme and domain codes.
 
     Args:
         segmentation_code: Segmentation code (e.g., "SEN_2019DHS8_v1").
         segment_code: Segment code (e.g., "R4").
-        theme_code: Optional theme code to filter variables by health theme
+        theme_code: Optional theme code to filter Health Outcome metrics
             (e.g., "sexual_and_reproductive_health", "nutrition",
-            "maternal_health"). Use list_themes_and_domains to see all themes.
+            "maternal_health").
+        domain_code: Optional domain code to filter Vulnerability Factor metrics
+            (e.g., "household_economics", "social_support").
         variable_codes: Optional list of specific variable codes to filter by.
         limit: Maximum number of metrics to return (default 50, max 100).
         offset: Number of metrics to skip for pagination (default 0).
@@ -39,6 +47,9 @@ async def get_segment_metrics(
 
     if theme_code:
         filters["variable"]["themes"] = {"code": {"$eq": theme_code}}
+
+    if domain_code:
+        filters["variable"]["domain"] = {"code": {"$eq": domain_code}}
 
     if variable_codes:
         filters["variable"]["code"] = {"$in": variable_codes}

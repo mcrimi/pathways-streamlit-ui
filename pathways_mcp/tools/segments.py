@@ -100,9 +100,14 @@ async def get_segment_profile(
     """Get a comprehensive profile for a specific population segment.
 
     This is the "who are these women?" view — returns the segment's
-    vulnerability level, prevalence, and key metrics organized by
-    theme and domain. Use this to understand the characteristics and
-    health outcomes of a specific segment.
+    vulnerability level, prevalence, and key metrics organized into:
+    - **health_outcomes**: metrics linked to Themes (measurable health results
+      such as maternal health, nutrition, sexual and reproductive health).
+    - **vulnerability_factors**: metrics linked to Domains (structural and social
+      determinants such as household economics, social support).
+
+    Use this to understand the characteristics, health outcomes, and vulnerability
+    profile of a specific segment.
 
     Args:
         segmentation_code: Segmentation code (e.g., "SEN_2019DHS8_v1").

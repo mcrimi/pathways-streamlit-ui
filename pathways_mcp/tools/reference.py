@@ -6,12 +6,16 @@ from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
 
 
 async def list_themes_and_domains() -> str:
-    """List all health themes and vulnerability domains.
+    """List all health themes (Health Outcomes) and vulnerability domains (Vulnerability Factors).
 
-    Themes categorize health outcomes (e.g., Maternal Health, Nutrition,
-    Sexual and Reproductive Health). Domains categorize vulnerability
-    factors (e.g., Household economics, Social support). Use these codes
-    to filter variables and metrics by topic area.
+    - **Themes** relate to **Health Outcomes**: measurable health results such as
+      Maternal Health, Nutrition, or Sexual and Reproductive Health.
+    - **Domains** describe sets of **Vulnerability Factors**: structural and social
+      determinants that explain why a segment is vulnerable, such as Household
+      Economics or Social Support.
+
+    Use theme codes to filter health outcome metrics and domain codes to filter
+    vulnerability factor metrics in get_segment_metrics.
     """
     client = get_client()
 
@@ -36,7 +40,16 @@ async def list_themes_and_domains() -> str:
             entry["description"] = d.get("description_en")
         domains.append(entry)
 
-    output = {"themes": themes, "domains": domains}
+    output = {
+        "themes": {
+            "description": "Health Outcomes — measurable health results. Use theme codes to filter health outcome metrics.",
+            "items": themes,
+        },
+        "domains": {
+            "description": "Vulnerability Factors — structural and social determinants of vulnerability. Use domain codes to filter vulnerability factor metrics.",
+            "items": domains,
+        },
+    }
     return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
 
 
