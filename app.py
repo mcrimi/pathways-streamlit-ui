@@ -321,6 +321,33 @@ with st.sidebar:
             for t in tools:
                 desc_short = t.description[:100] + "…" if len(t.description) > 100 else t.description
                 st.markdown(f"**`{t.name}`**  \n{desc_short}")
+
+        prompts = client.prompts
+        if prompts:
+            st.markdown("**Prompts**")
+            for p in prompts:
+                with st.expander(f"💬 {p.name.replace('_', ' ').title()}", expanded=True):
+                    if p.description:
+                        st.caption(p.description)
+                    with st.form(key=f"prompt_form_{p.name}"):
+                        arg_vals: dict[str, str] = {}
+                        for arg in p.arguments:
+                            label = arg["name"].replace("_", " ").title()
+                            arg_vals[arg["name"]] = st.text_input(
+                                label,
+                                placeholder=arg.get("description", ""),
+                            )
+                        if st.form_submit_button("Send prompt", use_container_width=True, type="primary"):
+                            missing = [a["name"] for a in p.arguments if a.get("required") and not arg_vals.get(a["name"])]
+                            if missing:
+                                st.error(f"Required: {', '.join(missing)}")
+                            else:
+                                try:
+                                    rendered = client.get_prompt(p.name, arg_vals)
+                                    st.session_state["_pending_prompt"] = rendered
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"Error: {exc}")
     else:
         st.warning("⚠️ MCP server not connected")
         st.caption("Responses will use the model's general knowledge only.")

@@ -44,20 +44,33 @@ class MCPToolInfo:
         }
 
 
+class MCPPromptInfo:
+    """Lightweight descriptor for an MCP prompt."""
+
+    def __init__(self, name: str, description: str, arguments: list[dict]):
+        self.name = name
+        self.description = description
+        # Each argument: {name, description, required}
+        self.arguments = arguments
+
+
 class MCPClient:
     """Synchronous facade over an async MCP stdio session.
 
     Usage
     -----
     client = MCPClient(env={"PATHWAYS_API_TOKEN": "..."})
-    # client.tools  → list[MCPToolInfo]
+    # client.tools    → list[MCPToolInfo]
+    # client.prompts  → list[MCPPromptInfo]
     # client.call_tool("list_segmentations", {})  → str
+    # client.get_prompt("segment_deep_dive", {"segment_name": "...", "country": "..."})  → str
     # client.shutdown()
     """
 
     def __init__(self, env: dict[str, str] | None = None):
         self._env = env or {}
         self._tools: list[MCPToolInfo] = []
+        self._prompts: list[MCPPromptInfo] = []
         self._session: ClientSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
@@ -117,6 +130,23 @@ class MCPClient:
                     for t in tools_result.tools
                 ]
 
+                prompts_result = await session.list_prompts()
+                self._prompts = [
+                    MCPPromptInfo(
+                        name=p.name,
+                        description=p.description or "",
+                        arguments=[
+                            {
+                                "name": a.name,
+                                "description": a.description or "",
+                                "required": a.required or False,
+                            }
+                            for a in (p.arguments or [])
+                        ],
+                    )
+                    for p in prompts_result.prompts
+                ]
+
                 self._session = session
                 self._stop_event = asyncio.Event()
                 self._initialized.set()  # Signal that we're ready
@@ -132,8 +162,32 @@ class MCPClient:
     def tools(self) -> list[MCPToolInfo]:
         return self._tools
 
+    @property
+    def prompts(self) -> list[MCPPromptInfo]:
+        return self._prompts
+
     def get_openai_tools(self) -> list[dict]:
         return [t.to_openai_function() for t in self._tools]
+
+    def get_prompt(self, name: str, arguments: dict[str, str]) -> str:
+        """Synchronously render an MCP prompt and return its text content."""
+        if self._session is None or self._loop is None:
+            raise RuntimeError("MCP client is not initialised.")
+
+        async def _get():
+            result = await self._session.get_prompt(name, arguments)  # type: ignore[union-attr]
+            parts: list[str] = []
+            for msg in result.messages:
+                if hasattr(msg.content, "text"):
+                    parts.append(msg.content.text)
+            return "\n\n".join(parts)
+
+        future = asyncio.run_coroutine_threadsafe(_get(), self._loop)
+        try:
+            return future.result(timeout=30)
+        except Exception as exc:
+            logger.error("Prompt %r failed: %s", name, exc)
+            raise
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """Synchronously call an MCP tool and return its text result."""
