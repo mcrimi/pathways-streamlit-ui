@@ -1,8 +1,6 @@
 """Tools for reference data: themes, domains, and regions."""
 
-import json
-
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 async def list_themes_and_domains() -> str:
@@ -50,7 +48,7 @@ async def list_themes_and_domains() -> str:
             "items": domains,
         },
     }
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)
 
 
 async def list_regions(segmentation_code: str) -> str:
@@ -108,4 +106,4 @@ async def list_regions(segmentation_code: str) -> str:
         "regions": regions,
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)

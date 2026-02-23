@@ -1,20 +1,25 @@
 """Tools for querying quantitative metrics (the core data points)."""
 
-import json
-
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 async def get_segment_metrics(
     segmentation_code: str,
-    segment_code: str,
+    segment_code: str | None = None,
     theme_code: str | None = None,
     domain_code: str | None = None,
     variable_codes: list[str] | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> str:
-    """Get quantitative metrics (indicators, prevalence) for a segment.
+    """Get quantitative metrics (indicators, prevalence) for a segment or the sample total.
+
+    **Sample-total metrics**: metrics with no segment represent the weighted
+    aggregate across all sample respondents (not a census). Omit segment_code
+    to retrieve them. Use these as a baseline to compare individual segments.
+
+    **Segment-level metrics**: pass a segment_code to retrieve metrics for a
+    specific population group.
 
     Metrics fall into two categories:
     - **Health Outcomes**: linked to Themes (e.g., maternal_health, nutrition).
@@ -26,7 +31,8 @@ async def get_segment_metrics(
 
     Args:
         segmentation_code: Segmentation code (e.g., "SEN_2019DHS8_v1").
-        segment_code: Segment code (e.g., "R4").
+        segment_code: Segment code (e.g., "R4"). Omit to get sample-total
+            metrics (weighted aggregate across all sample respondents).
         theme_code: Optional theme code to filter Health Outcome metrics
             (e.g., "sexual_and_reproductive_health", "nutrition",
             "maternal_health").
@@ -41,9 +47,13 @@ async def get_segment_metrics(
     page = (offset // limit) + 1
 
     filters: dict = {
-        "segment": {"code": {"$eq": segment_code}},
         "variable": {"segmentation": {"code": {"$eq": segmentation_code}}},
     }
+
+    if segment_code:
+        filters["segment"] = {"code": {"$eq": segment_code}}
+    else:
+        filters["segment"] = {"$null": "true"}
 
     if theme_code:
         filters["variable"]["themes"] = {"code": {"$eq": theme_code}}
@@ -89,6 +99,8 @@ async def get_segment_metrics(
         metrics.append(entry)
 
     output = {
+        "level": "sample_total" if not segment_code else "segment",
+        "segment_code": segment_code,
         "metrics": metrics,
         "pagination": {
             "total": pagination.get("total", 0),
@@ -98,6 +110,6 @@ async def get_segment_metrics(
         },
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)
 
 

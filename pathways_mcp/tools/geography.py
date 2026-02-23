@@ -1,8 +1,6 @@
 """Tools for geographic distribution of segments across regions."""
 
-import json
-
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 async def get_geographic_distribution(
@@ -90,4 +88,4 @@ async def get_geographic_distribution(
         },
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)

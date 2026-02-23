@@ -1,9 +1,8 @@
 """Tools for exploring population segments within segmentations."""
 
-import json
 from typing import Any
 
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 def _blocks_to_text(blocks: list[dict] | None) -> str | None:
@@ -90,7 +89,7 @@ async def list_segments(
             "active": s.get("active"),
         })
 
-    return json.dumps(segments, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(segments)
 
 
 async def get_segment_profile(
@@ -105,6 +104,9 @@ async def get_segment_profile(
       such as maternal health, nutrition, sexual and reproductive health).
     - **vulnerability_factors**: metrics linked to Domains (structural and social
       determinants such as household economics, social support).
+
+    To compare a segment against the sample total, call get_segment_metrics
+    without a segment_code to retrieve the weighted sample-aggregate baseline.
 
     Use this to understand the characteristics, health outcomes, and vulnerability
     profile of a specific segment.
@@ -252,4 +254,4 @@ async def get_segment_profile(
         "vulnerability_factors": vulnerabilities,
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)

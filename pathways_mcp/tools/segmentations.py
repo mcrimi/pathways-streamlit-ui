@@ -1,8 +1,6 @@
 """Tools for exploring Pathways segmentations (country studies)."""
 
-import json
-
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 async def list_segmentations() -> str:
@@ -37,7 +35,7 @@ async def list_segmentations() -> str:
             "active": item.get("active"),
         })
 
-    return json.dumps(segmentations, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(segmentations)
 
 
 async def get_segmentation(code: str) -> str:
@@ -104,4 +102,4 @@ async def get_segmentation(code: str) -> str:
         "segments": segments,
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)

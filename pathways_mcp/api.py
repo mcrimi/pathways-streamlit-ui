@@ -1,11 +1,41 @@
 """Strapi API client for Pathways CMS."""
 
+import json
 import os
 from typing import Any
 
 import httpx
 
-RESPONSE_CHAR_LIMIT = 25_000
+# Maximum number of characters allowed in a tool response.
+# 100,000 characters ≈ 25,000 tokens — generous headroom while staying well
+# within the LLM context window.
+RESPONSE_CHAR_LIMIT = 150_000
+
+
+def format_response(data: Any, limit: int = RESPONSE_CHAR_LIMIT) -> str:
+    """Serialize data to JSON, always returning a valid JSON string.
+
+    Strategy:
+    1. Try pretty-printed (indent=2) — readable and under limit → return it.
+    2. Try compact (no indent) — saves ~30-40% chars → return if under limit.
+    3. If still over limit, return a valid JSON error object rather than a
+       truncated string, which would produce malformed JSON.
+    """
+    pretty = json.dumps(data, indent=2)
+    if len(pretty) <= limit:
+        return pretty
+
+    compact = json.dumps(data)
+    if len(compact) <= limit:
+        return compact
+
+    return json.dumps({
+        "error": "response_too_large",
+        "message": (
+            f"The response ({len(compact):,} chars) exceeds the {limit:,} char limit. "
+            "Use filters, pagination, or a more specific query to reduce the result size."
+        ),
+    })
 
 
 class StrapiClient:
@@ -18,9 +48,12 @@ class StrapiClient:
                 "PATHWAYS_API_TOKEN environment variable is required. "
                 "Get a read-only API token from the Pathways Strapi admin."
             )
-        base_url = os.environ.get(
-            "PATHWAYS_API_URL", "https://api.staging.withpathways.org"
-        )
+        base_url = os.environ.get("PATHWAYS_API_URL")
+        if not base_url:
+            raise RuntimeError(
+                "PATHWAYS_API_URL environment variable is required. "
+                "Set it to the base URL of the Pathways Strapi API."
+            )
         self._base_url = base_url.rstrip("/") + "/api"
         self._headers = {"Authorization": f"Bearer {token}"}
 

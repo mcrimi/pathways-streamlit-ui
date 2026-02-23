@@ -322,7 +322,7 @@ with st.sidebar:
                 desc_short = t.description[:100] + "…" if len(t.description) > 100 else t.description
                 st.markdown(f"**`{t.name}`**  \n{desc_short}")
 
-        prompts = client.prompts
+        prompts = getattr(client, "prompts", [])
         if prompts:
             st.markdown("**Prompts**")
             for p in prompts:

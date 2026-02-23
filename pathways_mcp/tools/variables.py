@@ -1,8 +1,6 @@
 """Tools for searching and filtering variables (indicators)."""
 
-import json
-
-from pathways_mcp.api import RESPONSE_CHAR_LIMIT, get_client
+from pathways_mcp.api import format_response, get_client
 
 
 async def search_variables(
@@ -91,4 +89,4 @@ async def search_variables(
         },
     }
 
-    return json.dumps(output, indent=2)[:RESPONSE_CHAR_LIMIT]
+    return format_response(output)
