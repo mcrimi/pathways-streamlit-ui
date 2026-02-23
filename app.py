@@ -314,13 +314,16 @@ with st.sidebar:
     client = st.session_state.mcp_client
     if client is not None:
         tools = client.tools
-        st.success(f"✅ MCP server connected — {len(tools)} tools")
+        api_url = os.environ.get("PATHWAYS_API_URL", "").rstrip("/")
+        st.success(f"✅ MCP connected — {len(tools)} tools")
+        st.caption(f"Server: `{api_url}`")
         with st.expander("Available tools", expanded=False):
             for t in tools:
                 desc_short = t.description[:100] + "…" if len(t.description) > 100 else t.description
                 st.markdown(f"**`{t.name}`**  \n{desc_short}")
     else:
         st.warning("⚠️ MCP server not connected")
+        st.caption("Responses will use the model's general knowledge only.")
         if st.button("Connect MCP server", use_container_width=True, type="primary"):
             get_mcp_client()
             st.rerun()
@@ -387,17 +390,15 @@ if active_prompt:
     st.session_state.pending_prompt = None  # consume it
 
 if active_prompt:
-    # Ensure the MCP client is ready
-    mcp = get_mcp_client()
-    if mcp is None:
-        st.error("Cannot process: MCP server unavailable. Check PATHWAYS_API_TOKEN.")
-        st.stop()
-
     # Validate OpenAI key
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         st.error("OPENAI_API_KEY is not set. Add it to your .env file.")
         st.stop()
+
+    # Use the MCP client only if already connected — never auto-start here.
+    # If not connected the LLM responds from its own knowledge (no tools).
+    mcp = st.session_state.mcp_client
 
     # Append the new user message to display history (if not already there via chip)
     last_display = current_conv["display_messages"]
@@ -416,7 +417,7 @@ if active_prompt:
     }
     llm_messages = reconstruct_llm_messages(conv_without_last, active_prompt)
 
-    openai_tools = mcp.get_openai_tools()
+    openai_tools = mcp.get_openai_tools() if mcp is not None else []
     openai_client = OpenAI(api_key=openai_key)
 
     # -----------------------------------------------------------------------
