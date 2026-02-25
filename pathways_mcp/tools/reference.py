@@ -72,12 +72,12 @@ async def list_regions(segmentation_code: str) -> str:
     )
     seg_data = seg_result.get("data", [])
     if not seg_data:
-        return json.dumps({"error": f"Segmentation '{segmentation_code}' not found."})
+        return format_response({"error": f"Segmentation '{segmentation_code}' not found."})
 
     geo = seg_data[0].get("geography") or {}
     geo_code = geo.get("code")
     if not geo_code:
-        return json.dumps({"error": "Segmentation has no associated geography."})
+        return format_response({"error": "Segmentation has no associated geography."})
 
     # Fetch active regions for this geography, excluding geometry
     regions_data = await client.fetch_all(

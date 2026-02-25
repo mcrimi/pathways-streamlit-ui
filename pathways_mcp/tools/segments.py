@@ -117,7 +117,7 @@ async def get_segment_profile(
     """
     client = get_client()
 
-    # Fetch the segment (active only)
+    # Fetch the segment
     seg_result = await client.fetch_collection(
         "segments",
         filters={
@@ -128,7 +128,7 @@ async def get_segment_profile(
     )
     seg_data = seg_result.get("data", [])
     if not seg_data:
-        return json.dumps({
+        return format_response({
             "error": f"Segment '{segment_code}' not found in segmentation '{segmentation_code}'."
         })
 
@@ -206,7 +206,7 @@ async def get_segment_profile(
         else:
             vulnerabilities.setdefault(group_key, []).append(metric_entry)
 
-    # Build rich qualitative narrative fields from the segment record
+    # Build qualitative narrative fields from the segment record
     narratives: dict[str, Any] = {}
     qualitative_fields = {
         "summary": ["summary_en", "summary"],

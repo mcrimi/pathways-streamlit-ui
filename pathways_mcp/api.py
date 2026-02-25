@@ -7,8 +7,7 @@ from typing import Any
 import httpx
 
 # Maximum number of characters allowed in a tool response.
-# 100,000 characters ≈ 25,000 tokens — generous headroom while staying well
-# within the LLM context window.
+# 100,000 characters ≈ 25,000 tokens, should be well within the LLM context window.
 RESPONSE_CHAR_LIMIT = 150_000
 
 
@@ -106,6 +105,9 @@ class StrapiClient:
             full_key = f"{prefix}[{key}]"
             if isinstance(value, dict):
                 self._flatten_filters(value, full_key, out)
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    out[f"{full_key}[{i}]"] = str(item)
             else:
                 out[full_key] = str(value)
 
@@ -187,7 +189,7 @@ class StrapiClient:
         return all_data[:max_records]
 
 
-# Module-level singleton
+# Module-level singleton for lazy initialization
 _client: StrapiClient | None = None
 
 

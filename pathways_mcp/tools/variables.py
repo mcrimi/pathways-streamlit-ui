@@ -2,7 +2,7 @@
 
 from pathways_mcp.api import format_response, get_client
 
-
+#TODO: Maybe this function  should be in metrics.py? 
 async def search_variables(
     segmentation_code: str,
     search: str | None = None,
@@ -20,7 +20,8 @@ async def search_variables(
 
     Args:
         segmentation_code: Segmentation code (e.g., "SEN_2019DHS8_v1").
-        search: Optional text search on variable name (case-insensitive).
+        search: Optional text search on variable name (case-insensitive), 
+        If no search term is provided, all active variables will be returned that match the other filters.
         theme_code: Optional theme code to filter by health theme
             (e.g., "sexual_and_reproductive_health"). Use
             list_themes_and_domains for available codes.

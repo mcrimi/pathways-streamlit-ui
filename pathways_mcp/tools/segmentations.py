@@ -59,7 +59,7 @@ async def get_segmentation(code: str) -> str:
     )
     seg_data = seg_result.get("data", [])
     if not seg_data:
-        return json.dumps({"error": f"Segmentation '{code}' not found."})
+        return format_response({"error": f"Segmentation '{code}' not found."})
 
     seg = seg_data[0]
     geo = seg.get("geography") or {}
