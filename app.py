@@ -1,8 +1,8 @@
 """Pathways AI Assistant – Streamlit Chat UI
 
-Connects a local Pathways MCP server (stdio subprocess) to OpenAI's
-reasoning model so non-technical users can explore the Pathways health
-segmentation platform through a conversational interface.
+Connects to the remote Pathways MCP server at https://pathways.fastmcp.app/mcp
+and pairs it with OpenAI's reasoning model so non-technical users can explore
+the Pathways health segmentation platform through a conversational interface.
 """
 
 import json
@@ -23,9 +23,8 @@ load_dotenv(_HERE / ".env")
 
 # Support Streamlit Cloud secrets (they override the .env if present)
 try:
-    for _key in ("OPENAI_API_KEY", "PATHWAYS_API_TOKEN", "PATHWAYS_API_URL"):
-        if _key in st.secrets:
-            os.environ[_key] = st.secrets[_key]
+    if "OPENAI_API_KEY" in st.secrets:
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 except Exception:
     pass  # No secrets.toml present — rely on .env instead
 
@@ -201,20 +200,12 @@ def get_mcp_client():
     if "mcp_client" not in st.session_state or st.session_state.mcp_client is None:
         from mcp_client import MCPClient
 
-        token = os.environ.get("PATHWAYS_API_TOKEN", "")
-        url = os.environ.get("PATHWAYS_API_URL", "")
-        env = {}
-        if token:
-            env["PATHWAYS_API_TOKEN"] = token
-        if url:
-            env["PATHWAYS_API_URL"] = url
-
-        with st.spinner("Starting Pathways MCP server…"):
+        with st.spinner("Connecting to Pathways MCP server…"):
             try:
-                st.session_state.mcp_client = MCPClient(env=env)
+                st.session_state.mcp_client = MCPClient()
             except Exception as exc:
                 st.session_state.mcp_client = None
-                st.error(f"Failed to start MCP server: {exc}")
+                st.error(f"Failed to connect to MCP server: {exc}")
                 return None
 
     return st.session_state.mcp_client
@@ -314,9 +305,9 @@ with st.sidebar:
     client = st.session_state.mcp_client
     if client is not None:
         tools = client.tools
-        api_url = os.environ.get("PATHWAYS_API_URL", "").rstrip("/")
+        from mcp_client import REMOTE_MCP_URL
         st.success(f"✅ MCP connected — {len(tools)} tools")
-        st.caption(f"Server: `{api_url}`")
+        st.caption(f"Server: `{REMOTE_MCP_URL}`")
         with st.expander("Available tools", expanded=False):
             for t in tools:
                 desc_short = t.description[:100] + "…" if len(t.description) > 100 else t.description
@@ -359,9 +350,7 @@ with st.sidebar:
 
     with st.expander("Configuration"):
         api_key_set = bool(os.environ.get("OPENAI_API_KEY"))
-        token_set = bool(os.environ.get("PATHWAYS_API_TOKEN"))
         st.markdown(f"- OpenAI API key: {'✅' if api_key_set else '❌ missing'}")
-        st.markdown(f"- Pathways token: {'✅' if token_set else '❌ missing'}")
         st.markdown(f"- Model: `{selected_model}`")
         st.markdown(f"- System prompt: `{SYSTEM_PROMPT_PATH.name}`")
 

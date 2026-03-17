@@ -1,4 +1,4 @@
-"""Thread-safe wrapper around the async MCP stdio client.
+"""Thread-safe wrapper around the async MCP streamable HTTP client.
 
 The MCP SDK is fully async. Streamlit runs synchronously in the main thread.
 This module bridges the gap by running the MCP session in a background thread
@@ -9,18 +9,16 @@ to the Streamlit app.
 import asyncio
 import json
 import logging
-import os
-import sys
 import threading
-from pathlib import Path
 from typing import Any
 
 from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.streamable_http import streamable_http_client
+from pydantic import AnyUrl
 
 logger = logging.getLogger(__name__)
 
-_STREAMLIT_UI_DIR = Path(__file__).parent.resolve()
+REMOTE_MCP_URL = "https://pathways.fastmcp.app/mcp"
 
 
 class MCPToolInfo:
@@ -54,23 +52,35 @@ class MCPPromptInfo:
         self.arguments = arguments
 
 
+class MCPResourceInfo:
+    """Lightweight descriptor for an MCP resource."""
+
+    def __init__(self, uri: str, name: str, description: str, mime_type: str):
+        self.uri = uri  # stored as str via str(r.uri)
+        self.name = name
+        self.description = description
+        self.mime_type = mime_type
+
+
 class MCPClient:
-    """Synchronous facade over an async MCP stdio session.
+    """Synchronous facade over an async MCP streamable HTTP session.
 
     Usage
     -----
-    client = MCPClient(env={"PATHWAYS_API_TOKEN": "..."})
-    # client.tools    → list[MCPToolInfo]
-    # client.prompts  → list[MCPPromptInfo]
+    client = MCPClient()
+    # client.tools      → list[MCPToolInfo]
+    # client.prompts    → list[MCPPromptInfo]
+    # client.resources  → list[MCPResourceInfo]
     # client.call_tool("list_segmentations", {})  → str
     # client.get_prompt("segment_deep_dive", {"segment_name": "...", "country": "..."})  → str
+    # client.read_resource("resource://...")  → str
     # client.shutdown()
     """
 
-    def __init__(self, env: dict[str, str] | None = None):
-        self._env = env or {}
+    def __init__(self):
         self._tools: list[MCPToolInfo] = []
         self._prompts: list[MCPPromptInfo] = []
+        self._resources: list[MCPResourceInfo] = []
         self._session: ClientSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
@@ -82,11 +92,11 @@ class MCPClient:
         )
         self._thread.start()
 
-        # Wait up to 30 s for the MCP server to start and initialise
+        # Wait up to 60 s for the MCP server to connect and initialise
         if not self._initialized.wait(timeout=60):
             raise RuntimeError(
                 "MCP server did not initialise within 60 s. "
-                "Check PATHWAYS_API_TOKEN and server logs."
+                "Check network connectivity and server availability."
             )
         if self._init_error:
             raise self._init_error
@@ -108,15 +118,7 @@ class MCPClient:
             self._loop.close()
 
     async def _run_session(self):
-        merged_env = {**os.environ, **self._env}
-
-        params = StdioServerParameters(
-            command=sys.executable,
-            args=[str(_STREAMLIT_UI_DIR / "run_server.py")],
-            env=merged_env,
-        )
-
-        async with stdio_client(params) as (read, write):
+        async with streamable_http_client(REMOTE_MCP_URL) as (read, write, _):
             async with ClientSession(read, write) as session:
                 await session.initialize()
 
@@ -147,6 +149,17 @@ class MCPClient:
                     for p in prompts_result.prompts
                 ]
 
+                resources_result = await session.list_resources()
+                self._resources = [
+                    MCPResourceInfo(
+                        uri=str(r.uri),
+                        name=r.name,
+                        description=r.description or "",
+                        mime_type=r.mimeType or "",
+                    )
+                    for r in resources_result.resources
+                ]
+
                 self._session = session
                 self._stop_event = asyncio.Event()
                 self._initialized.set()  # Signal that we're ready
@@ -165,6 +178,10 @@ class MCPClient:
     @property
     def prompts(self) -> list[MCPPromptInfo]:
         return self._prompts
+
+    @property
+    def resources(self) -> list[MCPResourceInfo]:
+        return self._resources
 
     def get_openai_tools(self) -> list[dict]:
         return [t.to_openai_function() for t in self._tools]
@@ -207,6 +224,26 @@ class MCPClient:
             return future.result(timeout=120)
         except Exception as exc:
             logger.error("Tool call %r failed: %s", name, exc)
+            return json.dumps({"error": str(exc)})
+
+    def read_resource(self, uri: str) -> str:
+        """Synchronously read an MCP resource and return its text content."""
+        if self._session is None or self._loop is None:
+            raise RuntimeError("MCP client is not initialised.")
+
+        async def _read():
+            result = await self._session.read_resource(AnyUrl(uri))  # type: ignore[union-attr]
+            parts: list[str] = []
+            for content_item in result.contents:
+                if hasattr(content_item, "text"):
+                    parts.append(content_item.text)
+            return "\n".join(parts) if parts else ""
+
+        future = asyncio.run_coroutine_threadsafe(_read(), self._loop)
+        try:
+            return future.result(timeout=30)
+        except Exception as exc:
+            logger.error("Resource read %r failed: %s", uri, exc)
             return json.dumps({"error": str(exc)})
 
     def shutdown(self):
