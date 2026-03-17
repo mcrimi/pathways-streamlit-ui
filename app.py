@@ -15,6 +15,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from mcp_client import MCPClient, REMOTE_MCP_URL
+
 # ---------------------------------------------------------------------------
 # Bootstrap: load .env and Streamlit secrets
 # ---------------------------------------------------------------------------
@@ -198,8 +200,6 @@ def reconstruct_llm_messages(conv: dict, new_user_prompt: str) -> list[dict]:
 def get_mcp_client():
     """Return the singleton MCPClient, creating it on first call."""
     if "mcp_client" not in st.session_state or st.session_state.mcp_client is None:
-        from mcp_client import MCPClient
-
         with st.spinner("Connecting to Pathways MCP server…"):
             try:
                 st.session_state.mcp_client = MCPClient()
@@ -305,7 +305,6 @@ with st.sidebar:
     client = st.session_state.mcp_client
     if client is not None:
         tools = client.tools
-        from mcp_client import REMOTE_MCP_URL
         st.success(f"✅ MCP connected — {len(tools)} tools")
         st.caption(f"Server: `{REMOTE_MCP_URL}`")
         with st.expander("Available tools", expanded=False):
@@ -313,7 +312,7 @@ with st.sidebar:
                 desc_short = t.description[:100] + "…" if len(t.description) > 100 else t.description
                 st.markdown(f"**`{t.name}`**  \n{desc_short}")
 
-        prompts = getattr(client, "prompts", [])
+        prompts = client.prompts
         if prompts:
             st.markdown("**Prompts**")
             for p in prompts:
