@@ -190,13 +190,6 @@ TOOL_ICON = "🔧"
 USER_ICON = "👤"
 ASSISTANT_ICON = "🌍"
 
-SUGGESTIONS = {
-    "🌍 Which countries have data?": "Which countries have Pathways data available?",
-    "📊 Most vulnerable segments": "Show me the most vulnerable population segments available in the Pathways data.",
-    "👩 Segment profile (Senegal)": "Give me a detailed profile of the most vulnerable segment in Senegal.",
-    "📍 Geographic distribution": "Where are the most vulnerable women geographically concentrated in Senegal?",
-}
-
 
 # ---------------------------------------------------------------------------
 # Pure helper functions (defined before any Streamlit rendering)
@@ -471,26 +464,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Show suggestion chips on empty conversations
-if not current_conv["display_messages"]:
-    st.markdown("Ask me anything about the Pathways health segmentation platform:")
-    selected_chip = st.pills(
-        "Suggestions",
-        list(SUGGESTIONS.keys()),
-        label_visibility="collapsed",
-    )
-    if selected_chip:
-        prompt_from_chip = SUGGESTIONS[selected_chip]
-        current_conv["display_messages"].append(
-            {"role": "user", "content": prompt_from_chip}
-        )
-        # We'll fall through to the response generation below on the next rerun
-        # but we need to trigger a rerun first so the message is rendered
-        # Actually: just set a flag and let it flow through — but chips only trigger
-        # a rerun when clicked. We'll handle it via st.rerun() here and then the
-        # "pending prompt" will be picked up.
-        st.session_state["_pending_prompt"] = prompt_from_chip
-        st.rerun()
 
 # Render all stored messages (historical)
 render_conversation(current_conv)
