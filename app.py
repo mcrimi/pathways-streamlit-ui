@@ -22,6 +22,7 @@ from mcp_client import MCPClient, REMOTE_MCP_URL
 # ---------------------------------------------------------------------------
 _HERE = Path(__file__).parent.resolve()
 load_dotenv(_HERE / ".env")
+_LOGO_SVG = (_HERE / "assets" / "logo.svg").read_text(encoding="utf-8")
 
 # Support Streamlit Cloud secrets (they override the .env if present)
 try:
@@ -41,7 +42,8 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Pathways brand CSS  (Inter + Inter Tight, brand colours)
+# Pathways brand CSS — aligned with withpathways.org design system.
+# Uses CSS custom properties for all brand tokens.
 # Deliberately avoids span/svg so Streamlit's Material Icons are untouched.
 # ---------------------------------------------------------------------------
 st.markdown(
@@ -49,6 +51,21 @@ st.markdown(
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@500;600;700&display=swap');
 
+    /* ── Design tokens ── */
+    :root {
+        --pw-blue:        #0B6BCB;
+        --pw-blue-dark:   #185EA5;
+        --pw-blue-darker: #12467B;
+        --pw-blue-tint:   #E3F0FF;
+        --pw-accent:      #F28518;
+        --pw-bg:          #FBFCFE;
+        --pw-surface:     #F0F4F8;
+        --pw-border:      #DDE7EE;
+        --pw-text:        #171A1C;
+        --pw-text-muted:  #636B74;
+    }
+
+    /* ── Typography ── */
     body, p, li, label, input, textarea,
     [data-testid="stMarkdownContainer"] p,
     [data-testid="stMarkdownContainer"] li,
@@ -61,12 +78,95 @@ st.markdown(
 
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Inter Tight', sans-serif !important;
-        color: #073F8C !important;
+        color: var(--pw-blue-darker) !important;
         letter-spacing: -0.02em;
     }
 
-    a { color: #F28518 !important; }
-    hr { border-color: #FFD9B2 !important; opacity: 1 !important; }
+    a { color: var(--pw-blue) !important; }
+
+    hr { border-color: var(--pw-border) !important; opacity: 1 !important; }
+
+    /* ── Page background ── */
+    .stApp,
+    [data-testid="stAppViewContainer"] {
+        background-color: var(--pw-bg) !important;
+    }
+
+    /* ── Sidebar ── */
+    [data-testid="stSidebar"] > div {
+        background-color: #ffffff !important;
+        border-right: 1px solid var(--pw-border) !important;
+    }
+
+    /* Logo SVG fill */
+    .sidebar-logo svg path {
+        fill: var(--pw-blue-darker);
+    }
+
+    /* Primary buttons (New conversation + active conversation) */
+    [data-testid="stSidebarContent"] [data-testid="baseButton-primary"] {
+        background-color: var(--pw-blue) !important;
+        border-color: var(--pw-blue) !important;
+        color: #ffffff !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stSidebarContent"] [data-testid="baseButton-primary"]:hover {
+        background-color: var(--pw-blue-dark) !important;
+        border-color: var(--pw-blue-dark) !important;
+    }
+
+    /* Secondary buttons (inactive conversations, delete ✕) */
+    [data-testid="stSidebarContent"] [data-testid="baseButton-secondary"] {
+        background-color: transparent !important;
+        border-color: transparent !important;
+        color: var(--pw-text-muted) !important;
+        border-radius: 6px !important;
+    }
+    [data-testid="stSidebarContent"] [data-testid="baseButton-secondary"]:hover {
+        background-color: var(--pw-surface) !important;
+    }
+
+    /* Sidebar subheaders */
+    [data-testid="stSidebarContent"] h3 {
+        color: var(--pw-blue-darker) !important;
+    }
+
+    /* ── Custom page header ── */
+    .pw-page-title {
+        font-family: 'Inter Tight', sans-serif !important;
+        font-size: 1.75rem !important;
+        font-weight: 700 !important;
+        color: var(--pw-blue-darker) !important;
+        letter-spacing: -0.02em !important;
+        margin-bottom: 0.25rem !important;
+        padding: 0 !important;
+    }
+    .pw-title-divider {
+        height: 2px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--pw-blue), var(--pw-accent));
+        margin-bottom: 1rem;
+    }
+
+    /* ── Suggestion pills ── */
+    [data-testid="stPillsInput"] button,
+    .stPills button {
+        border: 1px solid var(--pw-border) !important;
+        color: var(--pw-blue-dark) !important;
+        border-radius: 20px !important;
+    }
+    [data-testid="stPillsInput"] button:hover,
+    .stPills button:hover {
+        background-color: var(--pw-blue-tint) !important;
+        border-color: var(--pw-blue) !important;
+    }
+
+    /* ── Tool-call expanders ── */
+    [data-testid="stExpander"] {
+        background-color: var(--pw-surface) !important;
+        border: 1px solid var(--pw-border) !important;
+        border-radius: 6px !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -182,8 +282,12 @@ def reconstruct_llm_messages(conv: dict, new_user_prompt: str) -> list[dict]:
             if dm.get("_llm_sequence"):
                 # Accurate replay: includes intermediate tool-calling rounds
                 messages.extend(dm["_llm_sequence"])
+            elif not dm.get("content") and not dm.get("tool_calls"):
+                # Pre-registered placeholder that was interrupted before any data
+                # was written — skip it to keep the OpenAI message sequence valid.
+                pass
             else:
-                # Fallback for messages saved before this fix
+                # Fallback for messages saved before _llm_sequence was introduced
                 asst_msg: dict = {"role": "assistant", "content": dm.get("content") or ""}
                 if dm.get("_raw_tool_calls"):
                     asst_msg["tool_calls"] = dm["_raw_tool_calls"]
@@ -232,7 +336,7 @@ if "mcp_client" not in st.session_state:
 # Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.title("🌍 Pathways AI")
+    st.markdown(f'<div class="sidebar-logo">{_LOGO_SVG}</div>', unsafe_allow_html=True)
     st.caption("Health segmentation assistant powered by MCP + OpenAI")
 
     st.divider()
@@ -361,7 +465,11 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 current_conv = get_or_create_conversation(st.session_state.current_conv_id)
 
-st.header("Pathways AI Assistant", divider="orange")
+st.markdown(
+    '<h1 class="pw-page-title">Pathways AI Assistant</h1>'
+    '<div class="pw-title-divider"></div>',
+    unsafe_allow_html=True,
+)
 
 # Show suggestion chips on empty conversations
 if not current_conv["display_messages"]:
@@ -450,6 +558,20 @@ if active_prompt:
         turn_llm_sequence: list[dict] = []
         final_response_text = ""
 
+        # Pre-register the assistant entry in display_messages NOW — before any
+        # streaming st.* calls that could trigger a Streamlit rerun-interrupt.
+        # If Q2 is submitted while Q1 is still streaming, Streamlit interrupts
+        # this run; without pre-registration, Q1_assistant would be absent from
+        # display_messages and Q2's run would render it in the wrong position.
+        # We mutate this dict in-place as streaming progresses.
+        _asst_entry: dict = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [],
+            "_llm_sequence": [],
+        }
+        current_conv["display_messages"].append(_asst_entry)
+
         for _round in range(10):  # safety cap on tool-call rounds
             # Build call params
             call_params: dict = dict(
@@ -481,6 +603,9 @@ if active_prompt:
                 # Stream text tokens
                 if delta.content:
                     accumulated_text += delta.content
+                    # Keep _asst_entry in sync so an interrupt mid-stream still
+                    # leaves a readable partial response in display_messages.
+                    _asst_entry["content"] = accumulated_text
                     text_placeholder.markdown(accumulated_text + "▌")
 
                 # Accumulate tool-call deltas
@@ -569,20 +694,16 @@ if active_prompt:
             turn_llm_sequence.append({"role": "assistant", "content": final_response_text})
             break
 
+        # Update the pre-registered entry in-place with the completed turn data.
+        _asst_entry["content"] = final_response_text
+        _asst_entry["tool_calls"] = collected_tool_calls
+        _asst_entry["_llm_sequence"] = turn_llm_sequence
+
+        # Auto-set conversation title after the first exchange
+        if len(current_conv["display_messages"]) == 2:
+            current_conv["title"] = title_from_first_user_message(current_conv)
+
         if final_response_text:
             text_placeholder.markdown(final_response_text)
         else:
             text_placeholder.empty()
-
-    # Persist the completed assistant turn
-    current_conv["display_messages"].append({
-        "role": "assistant",
-        "content": final_response_text,
-        "tool_calls": collected_tool_calls,
-        # Full LLM message sequence for accurate history reconstruction
-        "_llm_sequence": turn_llm_sequence,
-    })
-
-    # Auto-set conversation title after the first exchange
-    if len(current_conv["display_messages"]) == 2:
-        current_conv["title"] = title_from_first_user_message(current_conv)
