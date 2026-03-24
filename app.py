@@ -172,7 +172,9 @@ def reconstruct_llm_messages(conv: dict, new_user_prompt: str) -> list[dict]:
     sequence is the only way to get the tool_call_id pairing right when there
     were multiple rounds of tool use in a single turn.
     """
-    messages: list[dict] = [{"role": "system", "content": load_system_prompt()}]
+    mcp_connected = st.session_state.get("mcp_client") is not None
+    system_content = load_system_prompt() if mcp_connected else "You are a helpful assistant."
+    messages: list[dict] = [{"role": "system", "content": system_content}]
     for dm in conv["display_messages"]:
         if dm["role"] == "user":
             messages.append({"role": "user", "content": dm["content"]})
