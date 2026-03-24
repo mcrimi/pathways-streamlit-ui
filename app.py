@@ -280,8 +280,12 @@ def reconstruct_llm_messages(conv: dict, new_user_prompt: str) -> list[dict]:
             if dm.get("_llm_sequence"):
                 # Accurate replay: includes intermediate tool-calling rounds
                 messages.extend(dm["_llm_sequence"])
+            elif not dm.get("content") and not dm.get("tool_calls"):
+                # Pre-registered placeholder that was interrupted before any data
+                # was written — skip it to keep the OpenAI message sequence valid.
+                pass
             else:
-                # Fallback for messages saved before this fix
+                # Fallback for messages saved before _llm_sequence was introduced
                 asst_msg: dict = {"role": "assistant", "content": dm.get("content") or ""}
                 if dm.get("_raw_tool_calls"):
                     asst_msg["tool_calls"] = dm["_raw_tool_calls"]
@@ -552,6 +556,20 @@ if active_prompt:
         turn_llm_sequence: list[dict] = []
         final_response_text = ""
 
+        # Pre-register the assistant entry in display_messages NOW — before any
+        # streaming st.* calls that could trigger a Streamlit rerun-interrupt.
+        # If Q2 is submitted while Q1 is still streaming, Streamlit interrupts
+        # this run; without pre-registration, Q1_assistant would be absent from
+        # display_messages and Q2's run would render it in the wrong position.
+        # We mutate this dict in-place as streaming progresses.
+        _asst_entry: dict = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [],
+            "_llm_sequence": [],
+        }
+        current_conv["display_messages"].append(_asst_entry)
+
         for _round in range(10):  # safety cap on tool-call rounds
             # Build call params
             call_params: dict = dict(
@@ -583,6 +601,9 @@ if active_prompt:
                 # Stream text tokens
                 if delta.content:
                     accumulated_text += delta.content
+                    # Keep _asst_entry in sync so an interrupt mid-stream still
+                    # leaves a readable partial response in display_messages.
+                    _asst_entry["content"] = accumulated_text
                     text_placeholder.markdown(accumulated_text + "▌")
 
                 # Accumulate tool-call deltas
@@ -671,20 +692,16 @@ if active_prompt:
             turn_llm_sequence.append({"role": "assistant", "content": final_response_text})
             break
 
+        # Update the pre-registered entry in-place with the completed turn data.
+        _asst_entry["content"] = final_response_text
+        _asst_entry["tool_calls"] = collected_tool_calls
+        _asst_entry["_llm_sequence"] = turn_llm_sequence
+
+        # Auto-set conversation title after the first exchange
+        if len(current_conv["display_messages"]) == 2:
+            current_conv["title"] = title_from_first_user_message(current_conv)
+
         if final_response_text:
             text_placeholder.markdown(final_response_text)
         else:
             text_placeholder.empty()
-
-    # Persist the completed assistant turn
-    current_conv["display_messages"].append({
-        "role": "assistant",
-        "content": final_response_text,
-        "tool_calls": collected_tool_calls,
-        # Full LLM message sequence for accurate history reconstruction
-        "_llm_sequence": turn_llm_sequence,
-    })
-
-    # Auto-set conversation title after the first exchange
-    if len(current_conv["display_messages"]) == 2:
-        current_conv["title"] = title_from_first_user_message(current_conv)
